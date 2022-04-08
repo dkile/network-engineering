@@ -11,8 +11,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -23,6 +26,8 @@ type message struct {
 
 func main() {
     
+    openSignalChannel("Bye bye~")
+
     start_time := time.Now()
     serverPort := "23875"
 
@@ -71,6 +76,24 @@ func main() {
             pconn.WriteTo([]byte("error"), r_addr)
         }
     }
+}
+
+func openSignalChannel(ment string) {
+	sigs := make(chan os.Signal, 1)
+
+	signal.Notify(sigs, syscall.SIGKILL, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
+
+	go func() {
+		sig := <-sigs
+		if sig.String() == "interrupt" {
+			fmt.Println()
+			fmt.Println(ment)
+		} else {
+			fmt.Println("unhandled signal")
+		}
+		close(sigs)
+		os.Exit(0)
+	}()
 }
 
 func fmtDuration(d time.Duration) string {
