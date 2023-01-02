@@ -32,28 +32,27 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-
 func main() {
-		openSignalChannel("Bye bye~")
+	openSignalChannel("Bye bye~")
 
-    serverName := "localhost"
-    serverPort := "33875"
+	serverName := "localhost"
+	serverPort := "33875"
 
-    conn, err:= net.Dial("tcp", serverName+":"+serverPort)
-    if err != nil {
-      log.Fatalln("tcp connection error: ", err)
-    }
+	conn, err := net.Dial("tcp", serverName+":"+serverPort)
+	if err != nil {
+		log.Fatalln("tcp connection error: ", err)
+	}
 
-    defer conn.Close()
+	defer conn.Close()
 
-    localAddr := conn.LocalAddr().(*net.TCPAddr)
-    fmt.Printf("Client is running on port %d\n", localAddr.Port)
+	localAddr := conn.LocalAddr().(*net.TCPAddr)
+	fmt.Printf("Client is running on port %d\n", localAddr.Port)
 
-		readChannel := make(chan []byte)
-		go startMessageReader(conn, readChannel)
+	readChannel := make(chan []byte)
+	go startMessageReader(conn, readChannel)
 
-    for {
-		
+	for {
+
 		// choose input option
 		var inputOption string
 		fmt.Println("<Menu>")
@@ -106,7 +105,7 @@ func main() {
 * oepnSignalChannel
 * ment: good bye ment
 * When signal Ctrl+C inserted, print ment and exit process
-*/
+ */
 func openSignalChannel(ment string) {
 	sigs := make(chan os.Signal, 1)
 
@@ -131,7 +130,7 @@ func openSignalChannel(ment string) {
 * content: response message content
 * return: json encoded byte array
 * create Message struct with option, content and encode it by json
-*/
+ */
 func createRequestMessage(opt int, content string) []byte {
 	msg := Message{Option: opt, Content: content}
 	jsonMessage, err := json.Marshal(msg)
@@ -146,7 +145,7 @@ func createRequestMessage(opt int, content string) []byte {
 * reply: Message struct
 * return: string to print
 * classify message by option and make string to print
-*/
+ */
 func getResult(reply Message) string {
 	result := "Reply from server: "
 	switch reply.Option {
@@ -167,7 +166,7 @@ func getResult(reply Message) string {
 * buf: encoded json byte array
 * return: json decoded Message struct
 * get json byte array and decode it to Message struct
-*/
+ */
 func decodeJsonMessage(buffer []byte) Message {
 	var msg Message
 	json.Unmarshal(buffer, &msg)
@@ -180,11 +179,10 @@ func decodeJsonMessage(buffer []byte) Message {
 * conn: network connection
 * readChannel: channel to send buffer data
 * Read buffer and send buffer data by channel
-*/
+ */
 func startMessageReader(conn net.Conn, readChannel chan []byte) {
 	for {
 		buffer := make([]byte, 4096)
-		// conn.SetReadDeadline(time.Now().Add(time.Second * 5))
 		count, err := conn.Read(buffer)
 		if err != nil {
 			if err == io.EOF {

@@ -19,7 +19,13 @@ import (
 	"time"
 )
 
-type message struct {
+/**
+* Struct Message
+* Format of message
+* Option: a value that indicates what to do. Between 0 and 4
+* Conatent: message content
+ */
+type Message struct {
     Option int `json:"option"`
     Content string `json:"content"`
 }
@@ -28,56 +34,47 @@ func main() {
     
     openSignalChannel("Bye bye~")
 
-    start_time := time.Now()
+    startTime := time.Now()
     serverPort := "23875"
 
     pconn, _:= net.ListenPacket("udp", ":"+serverPort)
     fmt.Printf("Server is ready to receive on port %s\n", serverPort)
 
-    buffer := make([]byte, 1024)
+    buffer := make([]byte, 4096)
 
-    var req_msg message
-
-    req_cnt := 0
+    requestCount := 0
 
     for {
-        count, r_addr, err:= pconn.ReadFrom(buffer)
+        count, remoteAddr, err:= pconn.ReadFrom(buffer)
         if err != nil {
-            log.Fatal("Read error: ", err)
+            log.Fatal("buffer reading error: ", err)
         }
-        req_cnt += 1
-        json.Unmarshal(buffer[:count], &req_msg)
+        requestCount += 1
 
+        requestMessage := decodeJsonMessage(buffer[:count])
         
-        fmt.Printf("UDP message from %s\n", r_addr.String())
-        // fmt.Printf("res msg option: %d\n", req_msg.Option)
-        // fmt.Printf("res msg contetnt: %s\n", req_msg.Content)
+        fmt.Printf("UDP message from %s\n", remoteAddr.String())
 
-        switch req_msg.Option {
+        switch	requestMessage.Option {
         case 1:
-            upper_sentence := strings.ToUpper(req_msg.Content)
-            res_msg := &message{Option: 1, Content: upper_sentence}
-            json_msg, _ := json.Marshal(res_msg)
-            pconn.WriteTo(json_msg, r_addr)
+            pconn.WriteTo(createResponseMessage(1, strings.ToUpper(requestMessage.Content)), remoteAddr)
         case 2:
-            res_msg := &message{Option: 2, Content: r_addr.String()}
-            json_msg, _ := json.Marshal(res_msg)
-            pconn.WriteTo(json_msg, r_addr)
+            pconn.WriteTo(createResponseMessage(2, remoteAddr.String()), remoteAddr)
         case 3:
-            res_msg := &message{Option: 3, Content: strconv.Itoa(req_cnt)}
-            json_msg, _ := json.Marshal(res_msg)
-            pconn.WriteTo(json_msg, r_addr)
+            pconn.WriteTo(createResponseMessage(3, strconv.Itoa(requestCount)), remoteAddr)
         case 4:
-            duration := time.Now().Sub(start_time)
-            res_msg := &message{Option: 4, Content: fmtDuration(duration)}
-            json_msg, _ := json.Marshal(res_msg)
-            pconn.WriteTo(json_msg, r_addr)
+            pconn.WriteTo(createResponseMessage(4, formatDuration(time.Now().Sub(startTime))), remoteAddr)
         default:
-            pconn.WriteTo([]byte("error"), r_addr)
+            pconn.WriteTo(createResponseMessage(0, ""), remoteAddr)
         }
     }
 }
 
+/**
+* oepnSignalChannel
+* ment: good bye ment
+* When signal Ctrl+C inserted, print ment and exit process
+*/
 func openSignalChannel(ment string) {
 	sigs := make(chan os.Signal, 1)
 
@@ -96,7 +93,45 @@ func openSignalChannel(ment string) {
 	}()
 }
 
-func fmtDuration(d time.Duration) string {
+/**
+* decodeJsonMessage
+* buf: encoded json byte array
+* return: json decoded Message struct
+* get json byte array and decode it to Message struct
+*/
+func decodeJsonMessage(buf []byte) Message {
+	var msg Message
+	err := json.Unmarshal(buf, &msg)
+	if err != nil {
+		log.Println("Request message decoding error", err)
+		msg.Option = 0
+	}
+
+	return msg
+}
+
+/**
+* createResponseMessage
+* option: response message option
+* content: response message content
+* return: json encoded byte array
+* create Message struct with option, content and encode it by json
+*/
+func createResponseMessage(option int, content string) []byte {
+	msg := Message{Option: option, Content: content}
+	jsonMessage, err := json.Marshal(msg)
+	if err != nil {
+		log.Println("ResponseMessage encoding error", err)
+	}
+	return jsonMessage
+}
+
+/**
+* formatDuration
+* d: duration to format
+* format nano second duration to "HH:MM:SS"
+*/
+func formatDuration(d time.Duration) string {
     d = d.Round(time.Second)
     h := d / time.Hour
     d -= h * time.Hour

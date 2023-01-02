@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,23 @@ func main() {
 	startTime := time.Now()
 	serverPort := "33875"
 	requestCount := 0
+	connCount := 0
+	connMap := make(map[string]int)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func(ctx context.Context, interval time.Duration) {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fmt.Println("Number of connected clients =", len(connMap))
+			}
+		}
+	}(ctx, time.Second * 60)
 
 	openSignalChannel("Bye bye~")
 
@@ -52,25 +70,30 @@ func main() {
 		}
 		defer conn.Close()
 
-		timeChannel := make(chan time.Time)
-		go setConnTimer(conn, timeChannel, time.Second*60)
-
 		go func() {
+			
+			remoteAddr := conn.RemoteAddr().String()
+			connCount += 1
+			connMap[remoteAddr] = connCount
+			fmt.Println(remoteAddr)
+			fmt.Println("Client ", connCount, " connected. Number of connected clients = ", len(connMap))
+
 			buffer := make([]byte, 4096)
 			for {
 				count, err := conn.Read(buffer)
 				if err != nil {
 					if err == io.EOF {
-						log.Println("connection closed from client ", conn.RemoteAddr().String())
+						// log.Println("Client closes connection.")
+						id := connMap[remoteAddr]
+						delete(connMap, remoteAddr)
+						fmt.Println("Client", id, "disconnected. Number of connected clients = ", len(connMap))
+						conn.Close()
 					} else {
 						log.Println("buffer reading error: ", err)
 					}
-					timeChannel <- time.Time{}
 					return
 				}
-
-				timeChannel <- time.Now()																																	// reset timer
-				fmt.Println("connect with ", conn.RemoteAddr().String())
+																															
 				requestCount += 1
 
 				requestMessage := decodeJsonMessage(buffer[:count])
@@ -123,40 +146,6 @@ func decodeJsonMessage(buf []byte) Message {
 	}
 
 	return msg
-}
-
-/**
-* setConnTimer
-* conn: network conenction
-* timeChannel: channel to receive request refresh time
-* duration: duration for timer setting
-* set timer for duration time. When new request come, refresh timer. When the timer is over, then close connection
-*/
-func setConnTimer(conn net.Conn, timeChannel chan time.Time, duration time.Duration) {
-	timer := time.NewTimer(duration)
-	fmt.Println(conn, "timer started")
-	for {
-		select {
-		case req_time := <-timeChannel:
-			if req_time.IsZero() {
-				err := conn.(*net.TCPConn).SetLinger(0)
-				if err != nil {
-					log.Printf("Error when setting linger: %s", err)
-				}
-				fmt.Println("connection ", conn, " close")
-				conn.Close()
-				return
-			} else {
-				timer.Reset(duration)
-				fmt.Println(conn, "timer reset")
-			}
-		case <-timer.C:
-			fmt.Println(conn, "timer end")
-			fmt.Println("conenction", conn, "close")
-			conn.Close()
-			return
-		}
-	}
 }
 
 /**
